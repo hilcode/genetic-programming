@@ -2,10 +2,13 @@
 {
     packages = with pkgs; [
         boxes
+        glibcLocales
         jjui
         jujutsu
         just
     ];
+
+    env.LOCALE_ARCHIVE = "${pkgs.glibcLocales}/lib/locale/locale-archive";
 
     languages.rust = {
         enable = true;

@@ -30,10 +30,18 @@ use crate::generate::{Depth, PopulationSize};
 
 ## Variable Names
 
-Avoid short (1–2 character) variable names. Use descriptive names that make
-the role of the variable clear without needing to look at its type or context.
-This applies to all bindings: `let`, closure parameters, match arm bindings,
-and function parameters.
+Avoid short (1–2 character) variable names and abbreviations. Use descriptive
+names that make the role of the variable clear without needing to look at its
+type or context. This applies to all bindings: `let`, closure parameters, match
+arm bindings, function parameters, and struct field names.
+
+Common abbreviations to avoid:
+
+| Wrong | Right |
+|-------|-------|
+| `idx` | `index` |
+| `ctx` | `context` |
+| `cond` | `condition` or `predicate` |
 
 ## Types
 
