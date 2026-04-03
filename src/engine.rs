@@ -1,95 +1,86 @@
 use std::cmp::Ordering;
 
+use crate::atom::AtomRegistry;
+use crate::atom::Value;
+use crate::config::GpConfig;
 use crate::crossover::subtree_crossover;
 use crate::depth::Depth;
 use crate::generate::ramped_half_and_half;
 use crate::mutation::subtree_mutation;
+use crate::node::Node;
 use crate::population::Population;
-use crate::population_size::PopulationSize;
-use crate::probability::Probability;
 use crate::selection::tournament;
-use crate::top_fraction::TopFraction;
-use crate::tree::Expr;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
-pub struct GpConfig {
-    pub population_size: PopulationSize,
-    /// Max depth for initial trees and mutation-generated subtrees.
-    pub max_depth: Depth,
-    pub generations: usize,
-    pub crossover_rate: Probability,
-    pub mutation_rate: Probability,
-    pub tournament_size: usize,
-    /// Fraction of the population (by raw fitness) used to compute the median size
-    /// reference for the size penalty.
-    pub size_reference_fraction: TopFraction,
-    /// Optional RNG seed for reproducible runs.
-    pub seed: Option<u64>,
-}
-
-impl Default for GpConfig {
-    fn default() -> Self {
-        Self {
-            population_size: PopulationSize::new(100),
-            max_depth: Depth::new(6),
-            generations: 50,
-            crossover_rate: Probability::new(90),
-            mutation_rate: Probability::new(10),
-            tournament_size: 3,
-            size_reference_fraction: TopFraction::new(10),
-            seed: None,
-        }
-    }
-}
-
-pub struct GpEngine<F> {
+pub struct GpEngine<Ctx, F> {
     config: GpConfig,
+    registry: AtomRegistry<Ctx>,
     fitness_fn: F,
 }
 
-impl<F: Fn(&Expr) -> f64> GpEngine<F> {
-    pub fn new(config: GpConfig, fitness_fn: F) -> Self {
-        Self { config, fitness_fn }
+impl<Ctx, F> GpEngine<Ctx, F>
+where
+    F: Fn(&Node, &AtomRegistry<Ctx>) -> f64,
+{
+    pub fn new(config: GpConfig, registry: AtomRegistry<Ctx>, fitness_fn: F) -> Self {
+        Self { config, registry, fitness_fn }
     }
 
-    pub fn run(&self) -> Expr {
+    /// Evaluates `node` against `context` using the engine's atom registry.
+    pub fn eval(&self, node: &Node, context: &Ctx) -> Value {
+        self.registry.eval(node, context)
+    }
+
+    pub fn run(&self) -> Node {
         let mut rng: StdRng = match self.config.seed {
             Some(seed) => StdRng::seed_from_u64(seed),
             None => StdRng::from_entropy(),
         };
 
-        let mut population: Population =
-            ramped_half_and_half(self.config.population_size, Depth::new(2), self.config.max_depth, &mut rng);
+        let mut population: Population = ramped_half_and_half(
+            self.config.population_size,
+            Depth::new(2),
+            self.config.max_depth,
+            &self.registry,
+            &mut rng,
+        );
+
         let (_, mut fitnesses): (Vec<f64>, Vec<f64>) = self.evaluate_all(&population);
         let mut raw_fitnesses: Vec<f64>;
 
-        let (mut best_idx, _): (usize, f64) = best_index(&fitnesses);
-        let mut best: Expr = population[best_idx].clone();
+        let (mut best_index, _): (usize, f64) = best_index_of(&fitnesses);
+        let mut best: Node = population[best_index].clone();
 
         for generation in 0..self.config.generations {
-            let mut next_population: Population = Population::with_capacity(self.config.population_size);
+            let mut next_population: Population =
+                Population::with_capacity(self.config.population_size);
 
             // Elitism: carry the best individual forward unchanged.
             next_population.push(best.clone());
 
             while next_population.size() < self.config.population_size {
-                let parent1: Expr =
-                    tournament(&population, &fitnesses, self.config.tournament_size, &mut rng).clone();
-                let parent2: Expr =
-                    tournament(&population, &fitnesses, self.config.tournament_size, &mut rng).clone();
+                let parent1: Node =
+                    tournament(&population, &fitnesses, self.config.tournament_size, &mut rng)
+                        .clone();
+                let parent2: Node =
+                    tournament(&population, &fitnesses, self.config.tournament_size, &mut rng)
+                        .clone();
 
-                let (mut child1, mut child2): (Expr, Expr) = if self.config.crossover_rate.occurs(&mut rng) {
-                    subtree_crossover(&parent1, &parent2, &mut rng)
-                } else {
-                    (parent1, parent2)
-                };
+                let (mut child1, mut child2): (Node, Node) =
+                    if self.config.crossover_rate.occurs(&mut rng) {
+                        subtree_crossover(&parent1, &parent2, &self.registry, &mut rng)
+                    } else {
+                        (parent1, parent2)
+                    };
 
                 if self.config.mutation_rate.occurs(&mut rng) {
-                    child1 = subtree_mutation(&child1, self.config.max_depth, &mut rng);
+                    child1 =
+                        subtree_mutation(&child1, &self.registry, self.config.max_depth, &mut rng);
                 }
                 if self.config.mutation_rate.occurs(&mut rng) {
-                    child2 = subtree_mutation(&child2, self.config.max_depth, &mut rng);
+                    child2 =
+                        subtree_mutation(&child2, &self.registry, self.config.max_depth, &mut rng);
                 }
 
                 next_population.push(child1);
@@ -100,13 +91,13 @@ impl<F: Fn(&Expr) -> f64> GpEngine<F> {
 
             population = next_population;
             (raw_fitnesses, fitnesses) = self.evaluate_all(&population);
-            best_idx = best_index(&fitnesses).0;
-            best = population[best_idx].clone();
+            best_index = best_index_of(&fitnesses).0;
+            best = population[best_index].clone();
 
             println!(
                 "Gen {:>3}: best fitness = {:.4}  expr = {}",
                 generation + 1,
-                raw_fitnesses[best_idx],
+                raw_fitnesses[best_index],
                 best
             );
         }
@@ -116,7 +107,7 @@ impl<F: Fn(&Expr) -> f64> GpEngine<F> {
 
     fn evaluate_all(&self, population: &Population) -> (Vec<f64>, Vec<f64>) {
         let raw_fitnesses: Vec<f64> = population.iter()
-            .map(|expr| (self.fitness_fn)(expr))
+            .map(|node| (self.fitness_fn)(node, &self.registry))
             .collect();
 
         let min_fitness: f64 = raw_fitnesses.iter().cloned().fold(f64::INFINITY, f64::min);
@@ -132,8 +123,8 @@ impl<F: Fn(&Expr) -> f64> GpEngine<F> {
             self.size_reference(population, &normalized);
 
         let adjusted: Vec<f64> = normalized.iter().zip(population.iter())
-            .map(|(&fitness, expr)| {
-                let size: usize = expr.size();
+            .map(|(&fitness, node)| {
+                let size: usize = node.size();
                 let size_factor: f64 = (reference_size as f64 / size as f64).min(1.0);
                 fitness * (1.0 - median_fitness * (1.0 - size_factor))
             })
@@ -149,7 +140,9 @@ impl<F: Fn(&Expr) -> f64> GpEngine<F> {
 
         let mut indices: Vec<usize> = (0..normalized_fitnesses.len()).collect();
         indices.sort_by(|&left, &right| {
-            normalized_fitnesses[right].partial_cmp(&normalized_fitnesses[left]).unwrap_or(Ordering::Equal)
+            normalized_fitnesses[right]
+                .partial_cmp(&normalized_fitnesses[left])
+                .unwrap_or(Ordering::Equal)
         });
 
         let mut top_sizes: Vec<usize> = indices[..top_count]
@@ -176,7 +169,7 @@ impl<F: Fn(&Expr) -> f64> GpEngine<F> {
     }
 }
 
-fn best_index(fitnesses: &[f64]) -> (usize, f64) {
+fn best_index_of(fitnesses: &[f64]) -> (usize, f64) {
     fitnesses
         .iter()
         .enumerate()

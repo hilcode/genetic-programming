@@ -1,5 +1,5 @@
+use crate::node::Node;
 use crate::population::Population;
-use crate::tree::Expr;
 use rand::Rng;
 use std::cmp::Ordering;
 
@@ -9,7 +9,7 @@ pub fn tournament<'a>(
     fitnesses: &[f64],
     tournament_size: usize,
     rng: &mut impl Rng,
-) -> &'a Expr {
+) -> &'a Node {
     let winner: usize = (0..tournament_size)
         .map(|_| population.random_index(rng))
         .max_by(|&left_index, &right_index| {

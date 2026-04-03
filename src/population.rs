@@ -1,18 +1,18 @@
 use std::ops::Index;
 
+use crate::node::Node;
 use crate::population_size::PopulationSize;
-use crate::tree::Expr;
 use rand::Rng;
 
-pub struct Population(Vec<Expr>);
+pub struct Population(Vec<Node>);
 
 impl Population {
     pub fn with_capacity(size: PopulationSize) -> Self {
         Population(size.new_vec())
     }
 
-    pub fn push(&mut self, expr: Expr) {
-        self.0.push(expr);
+    pub fn push(&mut self, node: Node) {
+        self.0.push(node);
     }
 
     pub fn size(&self) -> PopulationSize {
@@ -23,21 +23,21 @@ impl Population {
         rng.gen_range(self.size().indices())
     }
 
-    pub fn iter(&self) -> impl Iterator<Item = &Expr> {
+    pub fn iter(&self) -> impl Iterator<Item = &Node> {
         self.0.iter()
     }
 }
 
 impl Index<usize> for Population {
-    type Output = Expr;
+    type Output = Node;
 
-    fn index(&self, index: usize) -> &Expr {
+    fn index(&self, index: usize) -> &Node {
         &self.0[index]
     }
 }
 
-impl FromIterator<Expr> for Population {
-    fn from_iter<Iter: IntoIterator<Item = Expr>>(iter: Iter) -> Self {
+impl FromIterator<Node> for Population {
+    fn from_iter<Iter: IntoIterator<Item = Node>>(iter: Iter) -> Self {
         Population(iter.into_iter().collect())
     }
 }

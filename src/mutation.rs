@@ -1,16 +1,19 @@
+use crate::atom::AtomRegistry;
 use crate::depth::Depth;
-use crate::generate::grow_bool;
-use crate::generate::grow_num;
-use crate::tree::Expr;
-use crate::tree::Type;
+use crate::generate::grow;
+use crate::node::Node;
 use rand::Rng;
 
-/// Subtree mutation: replaces a random subexpression with a newly generated one of the same type.
-pub fn subtree_mutation(tree: &Expr, max_depth: Depth, rng: &mut impl Rng) -> Expr {
+/// Subtree mutation: replaces a random node with a freshly generated subtree
+/// of the same type.
+pub fn subtree_mutation<Ctx>(
+    tree: &Node,
+    registry: &AtomRegistry<Ctx>,
+    max_depth: Depth,
+    rng: &mut impl Rng,
+) -> Node {
     let index: usize = rng.gen_range(0..tree.size());
-    let new_subtree: Expr = match tree.get(index).expr_type() {
-        Type::Num => grow_num(max_depth, rng),
-        Type::Bool => grow_bool(max_depth, rng),
-    };
+    let subtree_type = registry.type_of(tree.get(index));
+    let new_subtree: Node = grow(subtree_type, max_depth, registry, rng);
     tree.replace(index, &new_subtree)
 }

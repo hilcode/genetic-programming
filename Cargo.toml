@@ -1,8 +1,11 @@
 [package]
-name = "genetic-programming"
+name = "gp-engine"
 version = "0.1.0"
 edition = "2024"
-description = "genetic-programming"
+description = "GP Engine"
 
 [dependencies]
+clap = { version = "4", features = ["derive"] }
 rand = "0.8"
+serde = { version = "1", features = ["derive"] }
+toml = "0.8"
