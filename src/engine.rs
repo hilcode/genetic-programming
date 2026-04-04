@@ -1,7 +1,7 @@
 use std::cmp::Ordering;
+use std::rc::Rc;
 
 use crate::atom::AtomRegistry;
-use crate::atom::Value;
 use crate::config::GpConfig;
 use crate::crossover::subtree_crossover;
 use crate::depth::Depth;
@@ -15,7 +15,7 @@ use rand::rngs::StdRng;
 
 pub struct GpEngine<Ctx, F> {
     config: GpConfig,
-    registry: AtomRegistry<Ctx>,
+    registry: Rc<AtomRegistry<Ctx>>,
     fitness_fn: F,
 }
 
@@ -23,13 +23,8 @@ impl<Ctx, F> GpEngine<Ctx, F>
 where
     F: Fn(&Node, &AtomRegistry<Ctx>) -> f64,
 {
-    pub fn new(config: GpConfig, registry: AtomRegistry<Ctx>, fitness_fn: F) -> Self {
+    pub fn new(config: GpConfig, registry: Rc<AtomRegistry<Ctx>>, fitness_fn: F) -> Self {
         Self { config, registry, fitness_fn }
-    }
-
-    /// Evaluates `node` against `context` using the engine's atom registry.
-    pub fn eval(&self, node: &Node, context: &Ctx) -> Value {
-        self.registry.eval(node, context)
     }
 
     pub fn run(&self) -> Node {

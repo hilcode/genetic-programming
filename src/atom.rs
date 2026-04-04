@@ -13,21 +13,6 @@ pub enum Value {
     Bool(bool),
 }
 
-impl Value {
-    pub fn as_num(&self) -> i64 {
-        match self {
-            Value::Num(number) => *number,
-            Value::Bool(_) => panic!("expected a numeric value"),
-        }
-    }
-
-    pub fn as_bool(&self) -> bool {
-        match self {
-            Value::Bool(boolean) => *boolean,
-            Value::Num(_) => panic!("expected a boolean value"),
-        }
-    }
-}
 
 pub struct AtomDefinition<Ctx> {
     pub return_type: Type,

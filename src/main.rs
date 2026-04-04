@@ -1,6 +1,7 @@
 pub(crate) mod atom;
 pub(crate) mod cli;
 pub(crate) mod config;
+pub(crate) mod script;
 mod crossover;
 mod depth;
 mod engine;
@@ -16,102 +17,19 @@ mod top_fraction;
 use std::path::PathBuf;
 use std::process;
 
-use atom::AtomDefinition;
 use atom::AtomRegistry;
-use atom::Type;
-use atom::Value;
 use clap::Parser;
 use cli::Cli;
 use config::GpConfig;
 use config::RawConfig;
 use engine::GpEngine;
 use node::Node;
-
-pub struct Context {
-    pub target: i64,
-    pub flag: bool,
-}
-
-fn build_registry() -> AtomRegistry<Context> {
-    let mut registry: AtomRegistry<Context> = AtomRegistry::new(Type::Num);
-
-    // Numeric operators
-    registry.register("+", AtomDefinition::new(
-        Type::Num, vec![Type::Num, Type::Num],
-        |args: &[Value], _ctx: &Context| {
-            Value::Num(args[0].as_num().saturating_add(args[1].as_num()))
-        },
-    ));
-    registry.register("-", AtomDefinition::new(
-        Type::Num, vec![Type::Num, Type::Num],
-        |args: &[Value], _ctx: &Context| {
-            Value::Num(args[0].as_num().saturating_sub(args[1].as_num()))
-        },
-    ));
-    registry.register("*", AtomDefinition::new(
-        Type::Num, vec![Type::Num, Type::Num],
-        |args: &[Value], _ctx: &Context| {
-            Value::Num(args[0].as_num().saturating_mul(args[1].as_num()))
-        },
-    ));
-
-    // Control flow
-    registry.register("IF", AtomDefinition::new(
-        Type::Num, vec![Type::Bool, Type::Num, Type::Num],
-        |args: &[Value], _ctx: &Context| {
-            if args[0].as_bool() { Value::Num(args[1].as_num()) } else { Value::Num(args[2].as_num()) }
-        },
-    ));
-
-    // Boolean operators
-    registry.register("NOT", AtomDefinition::new(
-        Type::Bool, vec![Type::Bool],
-        |args: &[Value], _ctx: &Context| Value::Bool(!args[0].as_bool()),
-    ));
-    registry.register("AND", AtomDefinition::new(
-        Type::Bool, vec![Type::Bool, Type::Bool],
-        |args: &[Value], _ctx: &Context| Value::Bool(args[0].as_bool() && args[1].as_bool()),
-    ));
-    registry.register("OR", AtomDefinition::new(
-        Type::Bool, vec![Type::Bool, Type::Bool],
-        |args: &[Value], _ctx: &Context| Value::Bool(args[0].as_bool() || args[1].as_bool()),
-    ));
-    registry.register("XOR", AtomDefinition::new(
-        Type::Bool, vec![Type::Bool, Type::Bool],
-        |args: &[Value], _ctx: &Context| Value::Bool(args[0].as_bool() ^ args[1].as_bool()),
-    ));
-
-    // Numeric terminals
-    registry.register("TARGET", AtomDefinition::new(
-        Type::Num, vec![],
-        |_args: &[Value], ctx: &Context| Value::Num(ctx.target),
-    ));
-    for constant in -10i64..=10 {
-        registry.register(&constant.to_string(), AtomDefinition::new(
-            Type::Num, vec![],
-            move |_args: &[Value], _ctx: &Context| Value::Num(constant),
-        ));
-    }
-
-    // Boolean terminals
-    registry.register("TRUE", AtomDefinition::new(
-        Type::Bool, vec![],
-        |_args: &[Value], _ctx: &Context| Value::Bool(true),
-    ));
-    registry.register("FALSE", AtomDefinition::new(
-        Type::Bool, vec![],
-        |_args: &[Value], _ctx: &Context| Value::Bool(false),
-    ));
-    registry.register("FLAG", AtomDefinition::new(
-        Type::Bool, vec![],
-        |_args: &[Value], ctx: &Context| Value::Bool(ctx.flag),
-    ));
-
-    registry
-}
+use script::LispVal;
+use script::ScriptEngine;
 
 fn main() {
     let cli: Cli = Cli::parse();
+    let script_path: PathBuf = cli.script.clone();
     let config_path: PathBuf =
         cli.config.clone().unwrap_or_else(|| PathBuf::from("gp-engine.conf"));
     let has_explicit_config: bool = cli.config.is_some();
@@ -141,28 +59,25 @@ fn main() {
         process::exit(1);
     });
 
-    let engine = GpEngine::new(
+    let script_engine: ScriptEngine = ScriptEngine::new();
+    let domain = script_engine.load_domain_file(&script_path).unwrap_or_else(|error| {
+        eprintln!("error: {}", error);
+        process::exit(1);
+    });
+
+    let fitness_fn: LispVal = domain.fitness_fn;
+    let engine: GpEngine<LispVal, _> = GpEngine::new(
         gp_config,
-        build_registry(),
-        |node: &Node, registry: &AtomRegistry<Context>| {
-            let true_value: i64 =
-                registry.eval(node, &Context { target: 100, flag: true }).as_num();
-            let false_value: i64 =
-                registry.eval(node, &Context { target: 100, flag: false }).as_num();
-            let true_diff: i64 = (true_value - 42).abs();
-            let false_diff: i64 = (false_value - 123).abs();
-            // Fitness is the product of per-target scores. Summing the diffs would create a
-            // flat region for any value in [42, 123], giving the GP no gradient to follow.
-            // Multiplying penalises being wrong on either target independently.
-            (1.0 / (1.0 + true_diff as f64)) * (1.0 / (1.0 + false_diff as f64))
+        domain.registry,
+        move |node: &Node, _registry: &AtomRegistry<LispVal>| {
+            let node_val: LispVal = script::node_to_lisp_val(node);
+            let result: LispVal = script::apply(&fitness_fn, vec![node_val])
+                .unwrap_or_else(|error| panic!("fitness eval failed: {error}"));
+            result.as_float()
+                .unwrap_or_else(|error| panic!("fitness must return a number: {error}"))
         },
     );
 
     let best: Node = engine.run();
-    let true_result: i64 = engine.eval(&best, &Context { target: 100, flag: true }).as_num();
-    let false_result: i64 = engine.eval(&best, &Context { target: 100, flag: false }).as_num();
-
-    println!("\nBest expression: {}", best);
-    println!("FLAG=true  evaluates to: {} (target 42)",  true_result);
-    println!("FLAG=false evaluates to: {} (target 123)", false_result);
+    println!("\nBest expression: {best}");
 }

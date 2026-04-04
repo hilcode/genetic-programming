@@ -30,6 +30,10 @@ CONFIGURATION FILE (gp-engine.conf):
     Pass --config <FILE> to use a file at a non-default path."
 )]
 pub struct Cli {
+    /// Path to the domain script (.scm file)
+    #[arg(value_name = "SCRIPT")]
+    pub script: PathBuf,
+
     /// Path to a TOML configuration file [default: ./gp-engine.conf, if it exists]
     ///
     /// Settings in the file are overridden by any flags passed on the command line.
