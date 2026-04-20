@@ -56,8 +56,10 @@ impl ScriptEngine {
     /// this engine's environment so fitness lambdas can call it.
     pub fn load_domain_file(&self, path: &Path) -> Result<LoadedDomain, LispError> {
         domain::register_domain_forms(&self.env);
-        let results: Vec<LispVal> = self.run_file(path)?;
-        domain::build_domain(results, &self.env)
+        let default_results: Vec<LispVal> =
+            self.run_str(include_str!("default_simplifications.lisp"))?;
+        let user_results: Vec<LispVal> = self.run_file(path)?;
+        domain::build_domain([default_results, user_results].concat(), &self.env)
     }
 
 }

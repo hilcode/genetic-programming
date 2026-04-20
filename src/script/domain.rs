@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::rc::Rc;
 
 use crate::atom::AtomDefinition;
@@ -9,6 +10,8 @@ use crate::node::Node;
 use crate::script::env::Env;
 use crate::script::value::LispError;
 use crate::script::value::LispVal;
+use crate::simplification::PatternNode;
+use crate::simplification::SimplificationRule;
 
 use super::eval;
 
@@ -47,6 +50,19 @@ pub fn register_domain_forms(env: &Rc<RefCell<Env>>) {
         ]))
     });
 
+    reg(env, "simplification", |args| {
+        if args.len() != 3 {
+            return Err(LispError::arity("simplification", 3, args.len()));
+        }
+        args[0].as_str()?;
+        Ok(LispVal::List(vec![
+            LispVal::Symbol("__simplification__".to_string()),
+            args[0].clone(),
+            args[1].clone(),
+            args[2].clone(),
+        ]))
+    });
+
     reg(env, "fitness", |args| {
         if args.len() != 1 {
             return Err(LispError::arity("fitness", 1, args.len()));
@@ -71,6 +87,7 @@ pub fn build_domain(
     let mut terminal_defs: Vec<(String, Type, LispVal)> = Vec::new();
     let mut operator_defs: Vec<(String, Type, Vec<Type>, LispVal)> = Vec::new();
     let mut fitness_fn: Option<LispVal> = None;
+    let mut simplification_defs: Vec<SimplificationRule> = Vec::new();
 
     for result in results {
         let LispVal::List(ref elements) = result else { continue };
@@ -115,6 +132,17 @@ pub fn build_domain(
                     ));
                 }
                 fitness_fn = Some(elements[1].clone());
+            }
+            "__simplification__" => {
+                if elements.len() != 4 {
+                    return Err(LispError::Eval(
+                        "malformed __simplification__ tag (expected 4 elements)".to_string(),
+                    ));
+                }
+                let name: String = elements[1].as_str()?.to_string();
+                let pattern: PatternNode = lisp_val_to_pattern(&elements[2])?;
+                let template: PatternNode = lisp_val_to_pattern(&elements[3])?;
+                simplification_defs.push(SimplificationRule::new(name, pattern, template));
             }
             _ => {}
         }
@@ -180,12 +208,27 @@ pub fn build_domain(
         Ok(gp_to_lisp_value(&result))
     });
 
-    Ok(LoadedDomain { registry, fitness_fn })
+    let mut seen_names: HashSet<String> = HashSet::new();
+    let mut duplicates: Vec<String> = Vec::new();
+    for rule in &simplification_defs {
+        if !seen_names.insert(rule.name.clone()) {
+            duplicates.push(rule.name.clone());
+        }
+    }
+    if !duplicates.is_empty() {
+        return Err(LispError::Eval(format!(
+            "duplicate simplification rule names: {}",
+            duplicates.join(", ")
+        )));
+    }
+
+    Ok(LoadedDomain { registry, fitness_fn, simplifications: simplification_defs })
 }
 
 pub struct LoadedDomain {
     pub registry: Rc<AtomRegistry<LispVal>>,
     pub fitness_fn: LispVal,
+    pub simplifications: Vec<SimplificationRule>,
 }
 
 /// Converts a GP tree node to its S-expression representation as a `LispVal`.
@@ -234,6 +277,27 @@ fn lisp_to_gp_value(val: LispVal, expected_type: Type) -> Value {
             val.as_bool()
                 .unwrap_or_else(|error| panic!("expected Bool from script: {error}")),
         ),
+    }
+}
+
+fn lisp_val_to_pattern(val: &LispVal) -> Result<PatternNode, LispError> {
+    match val {
+        LispVal::Symbol(name) if name.starts_with('?') => Ok(PatternNode::Var(name.clone())),
+        LispVal::Symbol(name) => Ok(PatternNode::Literal(name.clone(), vec![])),
+        LispVal::Num(number) => Ok(PatternNode::Literal(number.to_string(), vec![])),
+        LispVal::Bool(boolean) => Ok(PatternNode::Literal(boolean.to_string(), vec![])),
+        LispVal::List(elements) if !elements.is_empty() => {
+            let name: String = elements[0].as_symbol()?.to_string();
+            let children: Vec<PatternNode> = elements[1..]
+                .iter()
+                .map(lisp_val_to_pattern)
+                .collect::<Result<Vec<_>, _>>()?;
+            Ok(PatternNode::Literal(name, children))
+        }
+        other => Err(LispError::Eval(format!(
+            "invalid pattern: expected symbol, number, or list, got {}",
+            other.type_name()
+        ))),
     }
 }
 

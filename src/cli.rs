@@ -73,6 +73,13 @@ pub struct Cli {
     #[arg(long, value_name = "N")]
     pub mutation_rate: Option<usize>,
 
+    /// Simplification probability as a percentage (0–100) [default: 5]
+    ///
+    /// Each child is independently simplified at this rate by applying one
+    /// bottom-up pass of the registered simplification rules.
+    #[arg(long, value_name = "N")]
+    pub simplification_rate: Option<usize>,
+
     /// Number of individuals competing in each tournament selection [default: 3]
     ///
     /// Higher values increase selection pressure, favouring fitter individuals
@@ -92,6 +99,10 @@ pub struct Cli {
     /// When omitted, a random seed is chosen at startup.
     #[arg(long, value_name = "N")]
     pub seed: Option<u64>,
+
+    /// Print all active simplification rules (defaults + any defined in the script) and exit
+    #[arg(long)]
+    pub list_simplifications: bool,
 }
 
 impl Cli {
@@ -102,6 +113,7 @@ impl Cli {
             generations: self.generations,
             crossover_rate: self.crossover_rate,
             mutation_rate: self.mutation_rate,
+            simplification_rate: self.simplification_rate,
             tournament_size: self.tournament_size,
             size_reference_fraction: self.size_reference_fraction,
             seed: self.seed,

@@ -10,6 +10,8 @@ use crate::mutation::subtree_mutation;
 use crate::node::Node;
 use crate::population::Population;
 use crate::selection::tournament;
+use crate::simplification::SimplificationRule;
+use crate::simplification::simplify_tree;
 use rand::SeedableRng;
 use rand::rngs::StdRng;
 
@@ -17,14 +19,20 @@ pub struct GpEngine<Ctx, F> {
     config: GpConfig,
     registry: Rc<AtomRegistry<Ctx>>,
     fitness_fn: F,
+    simplifications: Vec<SimplificationRule>,
 }
 
 impl<Ctx, F> GpEngine<Ctx, F>
 where
     F: Fn(&Node, &AtomRegistry<Ctx>) -> f64,
 {
-    pub fn new(config: GpConfig, registry: Rc<AtomRegistry<Ctx>>, fitness_fn: F) -> Self {
-        Self { config, registry, fitness_fn }
+    pub fn new(
+        config: GpConfig,
+        registry: Rc<AtomRegistry<Ctx>>,
+        fitness_fn: F,
+        simplifications: Vec<SimplificationRule>,
+    ) -> Self {
+        Self { config, registry, fitness_fn, simplifications }
     }
 
     pub fn run(&self) -> Node {
@@ -76,6 +84,13 @@ where
                 if self.config.mutation_rate.occurs(&mut rng) {
                     child2 =
                         subtree_mutation(&child2, &self.registry, self.config.max_depth, &mut rng);
+                }
+
+                if self.config.simplification_rate.occurs(&mut rng) {
+                    child1 = simplify_tree(&child1, &self.simplifications);
+                }
+                if self.config.simplification_rate.occurs(&mut rng) {
+                    child2 = simplify_tree(&child2, &self.simplifications);
                 }
 
                 next_population.push(child1);

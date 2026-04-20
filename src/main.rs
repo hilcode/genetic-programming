@@ -2,6 +2,7 @@ pub(crate) mod atom;
 pub(crate) mod cli;
 pub(crate) mod config;
 pub(crate) mod script;
+pub(crate) mod simplification;
 mod crossover;
 mod depth;
 mod engine;
@@ -30,6 +31,7 @@ use script::ScriptEngine;
 fn main() {
     let cli: Cli = Cli::parse();
     let script_path: PathBuf = cli.script.clone();
+    let list_simplifications: bool = cli.list_simplifications;
     let config_path: PathBuf =
         cli.config.clone().unwrap_or_else(|| PathBuf::from("gp-engine.conf"));
     let has_explicit_config: bool = cli.config.is_some();
@@ -65,6 +67,17 @@ fn main() {
         process::exit(1);
     });
 
+    if list_simplifications {
+        let name_width: usize = domain.simplifications.iter()
+            .map(|rule| rule.name.len() + 1)
+            .max()
+            .unwrap_or(0);
+        for rule in &domain.simplifications {
+            println!("{}", rule.display_aligned(name_width));
+        }
+        return;
+    }
+
     let fitness_fn: LispVal = domain.fitness_fn;
     let engine: GpEngine<LispVal, _> = GpEngine::new(
         gp_config,
@@ -76,6 +89,7 @@ fn main() {
             result.as_float()
                 .unwrap_or_else(|error| panic!("fitness must return a number: {error}"))
         },
+        domain.simplifications,
     );
 
     let best: Node = engine.run();

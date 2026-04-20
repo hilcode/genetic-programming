@@ -19,6 +19,7 @@ pub fn read_all(input: &str) -> Result<Vec<LispVal>, LispError> {
 enum Token {
     Open,
     Close,
+    Quote,
     Atom(String),
 }
 
@@ -35,8 +36,9 @@ fn tokenize(input: &str) -> Result<Vec<Token>, LispError> {
                     if next_ch == '\n' { break; }
                 }
             }
-            '(' => { tokens.push(Token::Open); chars.next(); }
+            '(' => { tokens.push(Token::Open);  chars.next(); }
             ')' => { tokens.push(Token::Close); chars.next(); }
+            '\'' => { tokens.push(Token::Quote); chars.next(); }
             '"' => {
                 chars.next(); // consume opening `"`
                 let mut string: String = String::new();
@@ -81,6 +83,10 @@ fn parse(tokens: &[Token], position: usize) -> Result<(LispVal, usize), LispErro
     match &tokens[position] {
         Token::Open  => parse_list(tokens, position + 1),
         Token::Close => Err(LispError::Parse("unexpected `)`".to_string())),
+        Token::Quote => {
+            let (quoted, next_position): (LispVal, usize) = parse(tokens, position + 1)?;
+            Ok((LispVal::List(vec![LispVal::Symbol("quote".to_string()), quoted]), next_position))
+        }
         Token::Atom(text) => Ok((parse_atom(text), position + 1)),
     }
 }

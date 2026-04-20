@@ -14,6 +14,7 @@ pub struct GpConfig {
     pub generations: usize,
     pub crossover_rate: Probability,
     pub mutation_rate: Probability,
+    pub simplification_rate: Probability,
     pub tournament_size: usize,
     /// Fraction of the population (by raw fitness) used to compute the median size
     /// reference for the size penalty.
@@ -40,6 +41,7 @@ pub struct RawConfig {
     pub generations: Option<usize>,
     pub crossover_rate: Option<usize>,
     pub mutation_rate: Option<usize>,
+    pub simplification_rate: Option<usize>,
     pub tournament_size: Option<usize>,
     pub size_reference_fraction: Option<usize>,
     pub seed: Option<u64>,
@@ -55,6 +57,7 @@ impl RawConfig {
             generations: Some(50),
             crossover_rate: Some(90),
             mutation_rate: Some(10),
+            simplification_rate: Some(5),
             tournament_size: Some(3),
             size_reference_fraction: Some(10),
             seed: None,
@@ -69,6 +72,7 @@ impl RawConfig {
             generations: other.generations.or(self.generations),
             crossover_rate: other.crossover_rate.or(self.crossover_rate),
             mutation_rate: other.mutation_rate.or(self.mutation_rate),
+            simplification_rate: other.simplification_rate.or(self.simplification_rate),
             tournament_size: other.tournament_size.or(self.tournament_size),
             size_reference_fraction: other.size_reference_fraction.or(self.size_reference_fraction),
             seed: other.seed.or(self.seed),
@@ -164,6 +168,15 @@ impl TryFrom<RawConfig> for GpConfig {
             });
         }
 
+        let simplification_rate: usize = raw.simplification_rate.unwrap_or(5);
+        if simplification_rate > 100 {
+            return Err(ConfigError::AboveMaximum {
+                field: "simplification_rate",
+                value: simplification_rate,
+                max: 100,
+            });
+        }
+
         let tournament_size: usize = raw.tournament_size.unwrap_or(3);
         if tournament_size < 1 {
             return Err(ConfigError::BelowMinimum {
@@ -195,6 +208,7 @@ impl TryFrom<RawConfig> for GpConfig {
             generations,
             crossover_rate: Probability::new(crossover_rate),
             mutation_rate: Probability::new(mutation_rate),
+            simplification_rate: Probability::new(simplification_rate),
             tournament_size,
             size_reference_fraction: TopFraction::new(size_reference_fraction),
             seed: raw.seed,
