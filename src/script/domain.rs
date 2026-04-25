@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::collections::HashSet;
 use std::rc::Rc;
 
@@ -15,12 +16,14 @@ use crate::simplification::SimplificationRule;
 
 use super::eval;
 
-/// Registers `terminal`, `operator`, and `fitness` as pure data-returning forms in `env`.
+/// Returns bindings for `terminal`, `operator`, and `fitness` domain forms.
 ///
 /// Each form returns a tagged `LispVal::List` rather than accumulating state.
 /// Collect the top-level results of a script run and pass them to `build_domain`.
-pub fn register_domain_forms(env: &Rc<RefCell<Scope>>) {
-    reg(env, "terminal", |args| {
+pub fn register_domain_forms() -> HashMap<String, LispVal> {
+    let mut bindings: HashMap<String, LispVal> = HashMap::new();
+
+    reg(&mut bindings, "terminal", |args| {
         if args.len() != 3 {
             return Err(LispError::arity("terminal", 3, args.len()));
         }
@@ -34,7 +37,7 @@ pub fn register_domain_forms(env: &Rc<RefCell<Scope>>) {
         ]))
     });
 
-    reg(env, "operator", |args| {
+    reg(&mut bindings, "operator", |args| {
         if args.len() != 4 {
             return Err(LispError::arity("operator", 4, args.len()));
         }
@@ -50,7 +53,7 @@ pub fn register_domain_forms(env: &Rc<RefCell<Scope>>) {
         ]))
     });
 
-    reg(env, "simplification", |args| {
+    reg(&mut bindings, "simplification", |args| {
         if args.len() != 3 {
             return Err(LispError::arity("simplification", 3, args.len()));
         }
@@ -63,7 +66,7 @@ pub fn register_domain_forms(env: &Rc<RefCell<Scope>>) {
         ]))
     });
 
-    reg(env, "fitness", |args| {
+    reg(&mut bindings, "fitness", |args| {
         if args.len() != 1 {
             return Err(LispError::arity("fitness", 1, args.len()));
         }
@@ -72,6 +75,8 @@ pub fn register_domain_forms(env: &Rc<RefCell<Scope>>) {
             args[0].clone(),
         ]))
     });
+
+    bindings
 }
 
 /// Processes top-level results from a domain script into a `LoadedDomain`.
@@ -198,15 +203,22 @@ pub fn build_domain(
 
     let registry: Rc<AtomRegistry<LispVal>> = Rc::new(registry);
 
+    // Register eval-tree into the environment so fitness lambdas can call it
     let eval_tree_registry: Rc<AtomRegistry<LispVal>> = Rc::clone(&registry);
-    reg(env, "eval-tree", move |args: &[LispVal]| {
-        if args.len() != 2 {
-            return Err(LispError::arity("eval-tree", 2, args.len()));
-        }
-        let node: Node = lisp_val_to_node(&args[0])?;
-        let result: Value = eval_tree_registry.eval(&node, &args[1]);
-        Ok(gp_to_lisp_value(&result))
-    });
+    env.borrow_mut().define(
+        "eval-tree".to_string(),
+        LispVal::NativeFn {
+            name: "eval-tree".to_string(),
+            func: Rc::new(move |args: &[LispVal]| {
+                if args.len() != 2 {
+                    return Err(LispError::arity("eval-tree", 2, args.len()));
+                }
+                let node: Node = lisp_val_to_node(&args[0])?;
+                let result: Value = eval_tree_registry.eval(&node, &args[1]);
+                Ok(gp_to_lisp_value(&result))
+            }),
+        },
+    );
 
     let mut seen_names: HashSet<String> = HashSet::new();
     let mut duplicates: Vec<String> = Vec::new();
@@ -312,12 +324,12 @@ pub fn parse_gp_type(name: &str) -> Result<Type, LispError> {
 }
 
 fn reg(
-    env: &Rc<RefCell<Scope>>,
+    bindings: &mut HashMap<String, LispVal>,
     name: &str,
     func: impl Fn(&[LispVal]) -> Result<LispVal, LispError> + 'static,
 ) {
     let owned_name: String = name.to_string();
-    env.borrow_mut().define(
+    bindings.insert(
         owned_name.clone(),
         LispVal::NativeFn { name: owned_name, func: Rc::new(func) },
     );

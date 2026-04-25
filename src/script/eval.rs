@@ -1,4 +1,5 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 
 use crate::script::scope::Scope;
@@ -43,11 +44,12 @@ pub fn apply(func: &LispVal, args: Vec<LispVal>) -> Result<LispVal, LispError> {
                     args.len()
                 )));
             }
-            let call_env: Rc<RefCell<Scope>> =
-                Rc::new(RefCell::new(Scope::new_child(Rc::clone(closure_env))));
+            let mut bindings: HashMap<String, LispVal> = HashMap::new();
             for (param, value) in params.iter().zip(args) {
-                call_env.borrow_mut().define(param.clone(), value);
+                bindings.insert(param.clone(), value);
             }
+            let call_scope: Scope = Scope::child_from_bindings(Rc::clone(closure_env), bindings);
+            let call_env: Rc<RefCell<Scope>> = Rc::new(RefCell::new(call_scope));
             eval_sequence(body, &call_env)
         }
         other => Err(LispError::Eval(format!("not callable: {other}"))),
@@ -110,9 +112,9 @@ fn eval_let(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispE
             "`let` requires a binding list and at least one body expression".to_string(),
         ));
     }
-    let bindings: &[LispVal] = args[0].as_list()?;
-    let let_env: Rc<RefCell<Scope>> = Rc::new(RefCell::new(Scope::new_child(Rc::clone(env))));
-    for binding in bindings {
+    let binding_list: &[LispVal] = args[0].as_list()?;
+    let mut bindings: HashMap<String, LispVal> = HashMap::new();
+    for binding in binding_list {
         let pair: &[LispVal] = binding.as_list()?;
         if pair.len() != 2 {
             return Err(LispError::Eval(
@@ -121,8 +123,10 @@ fn eval_let(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispE
         }
         let name: String = pair[0].as_symbol()?.to_string();
         let value: LispVal = eval(&pair[1], env)?;
-        let_env.borrow_mut().define(name, value);
+        bindings.insert(name, value);
     }
+    let let_scope: Scope = Scope::child_from_bindings(Rc::clone(env), bindings);
+    let let_env: Rc<RefCell<Scope>> = Rc::new(RefCell::new(let_scope));
     eval_sequence(&args[1..], &let_env)
 }
 

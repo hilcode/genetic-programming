@@ -26,8 +26,9 @@ pub struct ScriptEngine {
 impl ScriptEngine {
     /// Creates a new engine with all standard builtins pre-registered.
     pub fn new() -> ScriptEngine {
-        let env: Rc<RefCell<Scope>> = Rc::new(RefCell::new(Scope::new()));
-        builtins::register_builtins(&env);
+        let bindings = builtins::register_builtins();
+        let scope: Scope = Scope::from_bindings(bindings);
+        let env: Rc<RefCell<Scope>> = Rc::new(RefCell::new(scope));
         ScriptEngine { env }
     }
 
@@ -55,11 +56,28 @@ impl ScriptEngine {
     /// then builds and returns the `LoadedDomain`. Also registers `eval-tree` into
     /// this engine's environment so fitness lambdas can call it.
     pub fn load_domain_file(&self, path: &Path) -> Result<LoadedDomain, LispError> {
-        domain::register_domain_forms(&self.env);
-        let default_results: Vec<LispVal> =
-            self.run_str(include_str!("default_simplifications.lisp"))?;
-        let user_results: Vec<LispVal> = self.run_file(path)?;
-        domain::build_domain([default_results, user_results].concat(), &self.env)
+        let domain_bindings = domain::register_domain_forms();
+        let domain_scope: Scope = Scope::child_from_bindings(Rc::clone(&self.env), domain_bindings);
+        let domain_env: Rc<RefCell<Scope>> = Rc::new(RefCell::new(domain_scope));
+
+        // Evaluate default simplifications
+        let default_exprs: Vec<LispVal> = reader::read_all(include_str!("default_simplifications.lisp"))?;
+        let default_results: Vec<LispVal> = default_exprs
+            .iter()
+            .map(|expr| eval::eval(expr, &domain_env))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Evaluate user domain script
+        let user_contents: String = std::fs::read_to_string(path).map_err(|error| {
+            LispError::Eval(format!("failed to read {}: {error}", path.display()))
+        })?;
+        let user_exprs: Vec<LispVal> = reader::read_all(&user_contents)?;
+        let user_results: Vec<LispVal> = user_exprs
+            .iter()
+            .map(|expr| eval::eval(expr, &domain_env))
+            .collect::<Result<Vec<_>, _>>()?;
+
+        domain::build_domain([default_results, user_results].concat(), &domain_env)
     }
 
 }

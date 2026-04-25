@@ -1,72 +1,75 @@
-use std::cell::RefCell;
 use std::cmp::Ordering;
+use std::collections::HashMap;
 use std::rc::Rc;
 
-use crate::script::scope::Scope;
 use crate::script::value::LispError;
 use crate::script::value::LispVal;
 
-/// Registers all standard builtins into `env`.
-pub fn register_builtins(env: &Rc<RefCell<Scope>>) {
-    // Helper: wraps a function in a NativeFn and defines it in the environment.
+/// Returns a HashMap of all standard builtin functions.
+pub fn register_builtins() -> HashMap<String, LispVal> {
+    let mut bindings: HashMap<String, LispVal> = HashMap::new();
+
+    // Helper: wraps a function in a NativeFn and adds it to bindings.
     fn reg(
-        env: &Rc<RefCell<Scope>>,
+        bindings: &mut HashMap<String, LispVal>,
         name: &str,
         func: impl Fn(&[LispVal]) -> Result<LispVal, LispError> + 'static,
     ) {
         let owned_name: String = name.to_string();
-        env.borrow_mut().define(
+        bindings.insert(
             owned_name.clone(),
             LispVal::NativeFn { name: owned_name, func: Rc::new(func) },
         );
     }
 
     // Arithmetic
-    reg(env, "+",   builtin_add);
-    reg(env, "-",   builtin_sub);
-    reg(env, "*",   builtin_mul);
-    reg(env, "/",   builtin_div);
-    reg(env, "abs", builtin_abs);
-    reg(env, "mod", builtin_mod);
+    reg(&mut bindings,"+",   builtin_add);
+    reg(&mut bindings,"-",   builtin_sub);
+    reg(&mut bindings,"*",   builtin_mul);
+    reg(&mut bindings,"/",   builtin_div);
+    reg(&mut bindings,"abs", builtin_abs);
+    reg(&mut bindings,"mod", builtin_mod);
 
     // Comparison
-    reg(env, "=",  |args| compare_eq(args,  "=",  false));
-    reg(env, "!=", |args| compare_eq(args,  "!=", true));
-    reg(env, "<",  |args| compare_ord(args, "<",  |ord| ord == Ordering::Less));
-    reg(env, ">",  |args| compare_ord(args, ">",  |ord| ord == Ordering::Greater));
-    reg(env, "<=", |args| compare_ord(args, "<=", |ord| ord != Ordering::Greater));
-    reg(env, ">=", |args| compare_ord(args, ">=", |ord| ord != Ordering::Less));
+    reg(&mut bindings,"=",  |args| compare_eq(args,  "=",  false));
+    reg(&mut bindings,"!=", |args| compare_eq(args,  "!=", true));
+    reg(&mut bindings,"<",  |args| compare_ord(args, "<",  |ord| ord == Ordering::Less));
+    reg(&mut bindings,">",  |args| compare_ord(args, ">",  |ord| ord == Ordering::Greater));
+    reg(&mut bindings,"<=", |args| compare_ord(args, "<=", |ord| ord != Ordering::Greater));
+    reg(&mut bindings,">=", |args| compare_ord(args, ">=", |ord| ord != Ordering::Less));
 
     // Boolean (`and`/`or` are special forms in the evaluator; only `not` is a function)
-    reg(env, "not", builtin_not);
+    reg(&mut bindings,"not", builtin_not);
 
     // List operations
-    reg(env, "list",    |args| Ok(LispVal::List(args.to_vec())));
-    reg(env, "first",   builtin_first);
-    reg(env, "rest",    builtin_rest);
-    reg(env, "prepend", builtin_prepend);
-    reg(env, "empty?",  builtin_empty);
-    reg(env, "length",  builtin_length);
-    reg(env, "nth",     builtin_nth);
+    reg(&mut bindings,"list",    |args| Ok(LispVal::List(args.to_vec())));
+    reg(&mut bindings,"first",   builtin_first);
+    reg(&mut bindings,"rest",    builtin_rest);
+    reg(&mut bindings,"prepend", builtin_prepend);
+    reg(&mut bindings,"empty?",  builtin_empty);
+    reg(&mut bindings,"length",  builtin_length);
+    reg(&mut bindings,"nth",     builtin_nth);
 
     // String operations
-    reg(env, "concat", builtin_concat);
-    reg(env, "slice",  builtin_slice);
+    reg(&mut bindings,"concat", builtin_concat);
+    reg(&mut bindings,"slice",  builtin_slice);
 
     // Type predicates
-    reg(env, "num?",    |args| type_predicate(args, "num?",    |value| matches!(value, LispVal::Num(_))));
-    reg(env, "float?",  |args| type_predicate(args, "float?",  |value| matches!(value, LispVal::Float(_))));
-    reg(env, "bool?",   |args| type_predicate(args, "bool?",   |value| matches!(value, LispVal::Bool(_))));
-    reg(env, "str?",    |args| type_predicate(args, "str?",    |value| matches!(value, LispVal::Str(_))));
-    reg(env, "symbol?", |args| type_predicate(args, "symbol?", |value| matches!(value, LispVal::Symbol(_))));
-    reg(env, "list?",   |args| type_predicate(args, "list?",   |value| matches!(value, LispVal::List(_))));
-    reg(env, "nil?",    |args| type_predicate(args, "nil?",    LispVal::is_nil));
+    reg(&mut bindings,"num?",    |args| type_predicate(args, "num?",    |value| matches!(value, LispVal::Num(_))));
+    reg(&mut bindings,"float?",  |args| type_predicate(args, "float?",  |value| matches!(value, LispVal::Float(_))));
+    reg(&mut bindings,"bool?",   |args| type_predicate(args, "bool?",   |value| matches!(value, LispVal::Bool(_))));
+    reg(&mut bindings,"str?",    |args| type_predicate(args, "str?",    |value| matches!(value, LispVal::Str(_))));
+    reg(&mut bindings,"symbol?", |args| type_predicate(args, "symbol?", |value| matches!(value, LispVal::Symbol(_))));
+    reg(&mut bindings,"list?",   |args| type_predicate(args, "list?",   |value| matches!(value, LispVal::List(_))));
+    reg(&mut bindings,"nil?",    |args| type_predicate(args, "nil?",    LispVal::is_nil));
 
     // Association list
-    reg(env, "get", builtin_get);
+    reg(&mut bindings,"get", builtin_get);
 
     // I/O
-    reg(env, "print", builtin_print);
+    reg(&mut bindings,"print", builtin_print);
+
+    bindings
 }
 
 // ── Arithmetic ────────────────────────────────────────────────────────────────

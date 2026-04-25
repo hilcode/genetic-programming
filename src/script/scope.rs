@@ -18,6 +18,19 @@ impl Scope {
         Scope { bindings: HashMap::new(), parent: Some(parent) }
     }
 
+    /// Creates a root scope from a HashMap of bindings.
+    pub fn from_bindings(bindings: HashMap<String, LispVal>) -> Scope {
+        Scope { bindings, parent: None }
+    }
+
+    /// Creates a child scope from a parent and a HashMap of bindings.
+    pub fn child_from_bindings(
+        parent: Rc<RefCell<Scope>>,
+        bindings: HashMap<String, LispVal>,
+    ) -> Scope {
+        Scope { bindings, parent: Some(parent) }
+    }
+
     /// Defines a new binding in this scope (shadows any outer binding with the same name).
     pub fn define(&mut self, name: String, value: LispVal) {
         self.bindings.insert(name, value);
