@@ -61,7 +61,6 @@ fn eval_list(elements: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, 
     // Dispatch special forms before evaluating arguments
     if let LispVal::Symbol(name) = head {
         match name.as_str() {
-            "define" => return eval_define(tail, env),
             "lambda" => return eval_lambda(tail, env),
             "let"    => return eval_let(tail, env),
             "if"     => return eval_if(tail, env),
@@ -88,35 +87,6 @@ fn eval_sequence(exprs: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal,
         result = eval(expr, env)?;
     }
     Ok(result)
-}
-
-fn eval_define(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
-    if args.len() < 2 {
-        return Err(LispError::Eval("`define` requires at least 2 arguments".to_string()));
-    }
-    match &args[0] {
-        LispVal::Symbol(name) => {
-            let value: LispVal = eval(&args[1], env)?;
-            env.borrow_mut().define(name.clone(), value);
-            Ok(LispVal::Nil)
-        }
-        LispVal::List(signature) if !signature.is_empty() => {
-            // (define (name param ...) body ...) shorthand for lambda
-            let func_name: String = signature[0].as_symbol()?.to_string();
-            let params: Vec<String> = signature[1..]
-                .iter()
-                .map(|param| param.as_symbol().map(str::to_string))
-                .collect::<Result<Vec<_>, _>>()?;
-            let body: Vec<LispVal> = args[1..].to_vec();
-            let lambda: LispVal = LispVal::Lambda { params, body, env: Rc::clone(env) };
-            env.borrow_mut().define(func_name, lambda);
-            Ok(LispVal::Nil)
-        }
-        other => Err(LispError::Eval(format!(
-            "`define` first argument must be a symbol or list, got {}",
-            other.type_name()
-        ))),
-    }
 }
 
 fn eval_lambda(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
