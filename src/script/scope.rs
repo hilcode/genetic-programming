@@ -4,18 +4,18 @@ use std::rc::Rc;
 
 use crate::script::value::LispVal;
 
-pub struct Env {
+pub struct Scope {
     bindings: HashMap<String, LispVal>,
-    parent: Option<Rc<RefCell<Env>>>,
+    parent: Option<Rc<RefCell<Scope>>>,
 }
 
-impl Env {
-    pub fn new() -> Env {
-        Env { bindings: HashMap::new(), parent: None }
+impl Scope {
+    pub fn new() -> Scope {
+        Scope { bindings: HashMap::new(), parent: None }
     }
 
-    pub fn new_child(parent: Rc<RefCell<Env>>) -> Env {
-        Env { bindings: HashMap::new(), parent: Some(parent) }
+    pub fn new_child(parent: Rc<RefCell<Scope>>) -> Scope {
+        Scope { bindings: HashMap::new(), parent: Some(parent) }
     }
 
     /// Defines a new binding in this scope (shadows any outer binding with the same name).

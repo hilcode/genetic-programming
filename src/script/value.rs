@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::fmt;
 use std::rc::Rc;
 
-use crate::script::env::Env;
+use crate::script::scope::Scope;
 
 
 /// A heap-allocated, shareable callable value.
@@ -24,7 +24,7 @@ pub enum LispVal {
         params: Vec<String>,
         /// The body is a sequence of expressions; the last one's value is returned.
         body: Vec<LispVal>,
-        env: Rc<RefCell<Env>>,
+        env: Rc<RefCell<Scope>>,
     },
     NativeFn {
         name: String,

@@ -2,15 +2,15 @@ use std::cell::RefCell;
 use std::cmp::Ordering;
 use std::rc::Rc;
 
-use crate::script::env::Env;
+use crate::script::scope::Scope;
 use crate::script::value::LispError;
 use crate::script::value::LispVal;
 
 /// Registers all standard builtins into `env`.
-pub fn register_builtins(env: &Rc<RefCell<Env>>) {
+pub fn register_builtins(env: &Rc<RefCell<Scope>>) {
     // Helper: wraps a function in a NativeFn and defines it in the environment.
     fn reg(
-        env: &Rc<RefCell<Env>>,
+        env: &Rc<RefCell<Scope>>,
         name: &str,
         func: impl Fn(&[LispVal]) -> Result<LispVal, LispError> + 'static,
     ) {

@@ -1,8 +1,8 @@
 mod builtins;
 pub mod domain;
-mod env;
 mod eval;
 mod reader;
+mod scope;
 mod value;
 
 pub use domain::node_to_lisp_val;
@@ -14,19 +14,19 @@ use std::cell::RefCell;
 use std::path::Path;
 use std::rc::Rc;
 
-use env::Env;
+use scope::Scope;
 
 /// An interpreter instance with its own global environment.
 ///
 /// Multiple `ScriptEngine`s are fully independent — they share no state.
 pub struct ScriptEngine {
-    env: Rc<RefCell<Env>>,
+    env: Rc<RefCell<Scope>>,
 }
 
 impl ScriptEngine {
     /// Creates a new engine with all standard builtins pre-registered.
     pub fn new() -> ScriptEngine {
-        let env: Rc<RefCell<Env>> = Rc::new(RefCell::new(Env::new()));
+        let env: Rc<RefCell<Scope>> = Rc::new(RefCell::new(Scope::new()));
         builtins::register_builtins(&env);
         ScriptEngine { env }
     }

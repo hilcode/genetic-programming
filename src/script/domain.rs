@@ -7,7 +7,7 @@ use crate::atom::AtomRegistry;
 use crate::atom::Type;
 use crate::atom::Value;
 use crate::node::Node;
-use crate::script::env::Env;
+use crate::script::scope::Scope;
 use crate::script::value::LispError;
 use crate::script::value::LispVal;
 use crate::simplification::PatternNode;
@@ -19,7 +19,7 @@ use super::eval;
 ///
 /// Each form returns a tagged `LispVal::List` rather than accumulating state.
 /// Collect the top-level results of a script run and pass them to `build_domain`.
-pub fn register_domain_forms(env: &Rc<RefCell<Env>>) {
+pub fn register_domain_forms(env: &Rc<RefCell<Scope>>) {
     reg(env, "terminal", |args| {
         if args.len() != 3 {
             return Err(LispError::arity("terminal", 3, args.len()));
@@ -81,7 +81,7 @@ pub fn register_domain_forms(env: &Rc<RefCell<Env>>) {
 /// so registering it here (after building the registry) is safe.
 pub fn build_domain(
     results: Vec<LispVal>,
-    env: &Rc<RefCell<Env>>,
+    env: &Rc<RefCell<Scope>>,
 ) -> Result<LoadedDomain, LispError> {
     let mut root_type: Option<Type> = None;
     let mut terminal_defs: Vec<(String, Type, LispVal)> = Vec::new();
@@ -312,7 +312,7 @@ pub fn parse_gp_type(name: &str) -> Result<Type, LispError> {
 }
 
 fn reg(
-    env: &Rc<RefCell<Env>>,
+    env: &Rc<RefCell<Scope>>,
     name: &str,
     func: impl Fn(&[LispVal]) -> Result<LispVal, LispError> + 'static,
 ) {

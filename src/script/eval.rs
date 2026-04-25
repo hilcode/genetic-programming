@@ -1,12 +1,12 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::script::env::Env;
+use crate::script::scope::Scope;
 use crate::script::value::LispError;
 use crate::script::value::LispVal;
 
 /// Evaluates `expr` in the given environment and returns the result.
-pub fn eval(expr: &LispVal, env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+pub fn eval(expr: &LispVal, env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     match expr {
         // Self-evaluating atoms
         LispVal::Num(_)
@@ -43,8 +43,8 @@ pub fn apply(func: &LispVal, args: Vec<LispVal>) -> Result<LispVal, LispError> {
                     args.len()
                 )));
             }
-            let call_env: Rc<RefCell<Env>> =
-                Rc::new(RefCell::new(Env::new_child(Rc::clone(closure_env))));
+            let call_env: Rc<RefCell<Scope>> =
+                Rc::new(RefCell::new(Scope::new_child(Rc::clone(closure_env))));
             for (param, value) in params.iter().zip(args) {
                 call_env.borrow_mut().define(param.clone(), value);
             }
@@ -54,7 +54,7 @@ pub fn apply(func: &LispVal, args: Vec<LispVal>) -> Result<LispVal, LispError> {
     }
 }
 
-fn eval_list(elements: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_list(elements: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     let head: &LispVal = &elements[0];
     let tail: &[LispVal] = &elements[1..];
 
@@ -82,7 +82,7 @@ fn eval_list(elements: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, Li
     apply(&func, args)
 }
 
-fn eval_sequence(exprs: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_sequence(exprs: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     let mut result: LispVal = LispVal::Nil;
     for expr in exprs {
         result = eval(expr, env)?;
@@ -90,7 +90,7 @@ fn eval_sequence(exprs: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, L
     Ok(result)
 }
 
-fn eval_define(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_define(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     if args.len() < 2 {
         return Err(LispError::Eval("`define` requires at least 2 arguments".to_string()));
     }
@@ -119,7 +119,7 @@ fn eval_define(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, Lisp
     }
 }
 
-fn eval_lambda(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_lambda(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     if args.len() < 2 {
         return Err(LispError::Eval(
             "`lambda` requires a parameter list and at least one body expression".to_string(),
@@ -134,14 +134,14 @@ fn eval_lambda(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, Lisp
     Ok(LispVal::Lambda { params, body, env: Rc::clone(env) })
 }
 
-fn eval_let(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_let(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     if args.len() < 2 {
         return Err(LispError::Eval(
             "`let` requires a binding list and at least one body expression".to_string(),
         ));
     }
     let bindings: &[LispVal] = args[0].as_list()?;
-    let let_env: Rc<RefCell<Env>> = Rc::new(RefCell::new(Env::new_child(Rc::clone(env))));
+    let let_env: Rc<RefCell<Scope>> = Rc::new(RefCell::new(Scope::new_child(Rc::clone(env))));
     for binding in bindings {
         let pair: &[LispVal] = binding.as_list()?;
         if pair.len() != 2 {
@@ -156,7 +156,7 @@ fn eval_let(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr
     eval_sequence(&args[1..], &let_env)
 }
 
-fn eval_if(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_if(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     if args.len() < 2 || args.len() > 3 {
         return Err(LispError::Eval(
             "`if` requires 2 or 3 arguments: (if condition then [else])".to_string(),
@@ -172,7 +172,7 @@ fn eval_if(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErro
     }
 }
 
-fn eval_and(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_and(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     for arg in args {
         let value: LispVal = eval(arg, env)?;
         if !value.as_bool()? {
@@ -182,7 +182,7 @@ fn eval_and(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispErr
     Ok(LispVal::Bool(true))
 }
 
-fn eval_or(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_or(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     for arg in args {
         let value: LispVal = eval(arg, env)?;
         if value.as_bool()? {
@@ -199,6 +199,6 @@ fn eval_quote(args: &[LispVal]) -> Result<LispVal, LispError> {
     Ok(args[0].clone())
 }
 
-fn eval_begin(args: &[LispVal], env: &Rc<RefCell<Env>>) -> Result<LispVal, LispError> {
+fn eval_begin(args: &[LispVal], env: &Rc<RefCell<Scope>>) -> Result<LispVal, LispError> {
     eval_sequence(args, env)
 }
