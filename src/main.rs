@@ -1,32 +1,17 @@
-pub(crate) mod atom;
-pub(crate) mod cli;
-pub(crate) mod config;
-pub(crate) mod script;
-pub(crate) mod simplification;
-mod crossover;
-mod depth;
-mod engine;
-mod generate;
-mod mutation;
-pub(crate) mod node;
-mod population;
-mod population_size;
-mod probability;
-mod selection;
-mod top_fraction;
-
 use std::path::PathBuf;
 use std::process;
 
-use atom::AtomRegistry;
 use clap::Parser;
-use cli::Cli;
-use config::GpConfig;
-use config::RawConfig;
-use engine::GpEngine;
-use node::Node;
-use script::LispVal;
-use script::ScriptEngine;
+use gp_engine::apply;
+use gp_engine::node_to_lisp_val;
+use gp_engine::AtomRegistry;
+use gp_engine::Cli;
+use gp_engine::GpConfig;
+use gp_engine::GpEngine;
+use gp_engine::LispVal;
+use gp_engine::Node;
+use gp_engine::RawConfig;
+use gp_engine::ScriptEngine;
 
 fn main() {
     let cli: Cli = Cli::parse();
@@ -83,8 +68,8 @@ fn main() {
         gp_config,
         domain.registry,
         move |node: &Node, _registry: &AtomRegistry<LispVal>| {
-            let node_val: LispVal = script::node_to_lisp_val(node);
-            let result: LispVal = script::apply(&fitness_fn, vec![node_val])
+            let node_val: LispVal = node_to_lisp_val(node);
+            let result: LispVal = apply(&fitness_fn, vec![node_val])
                 .unwrap_or_else(|error| panic!("fitness eval failed: {error}"));
             result.as_float()
                 .unwrap_or_else(|error| panic!("fitness must return a number: {error}"))
