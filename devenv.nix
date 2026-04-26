@@ -2,10 +2,12 @@
 {
     packages = with pkgs; [
         boxes
+        cargo-llvm-cov
         glibcLocales
         jjui
         jujutsu
         just
+        llvm
     ];
 
     env.LOCALE_ARCHIVE = "${pkgs.glibcLocales}/lib/locale/locale-archive";

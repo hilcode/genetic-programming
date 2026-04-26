@@ -2,6 +2,7 @@
 channel = "stable"
 components = [
     "clippy",
+    "llvm-tools-preview",
     "rust-analyzer",
     "rust-docs",
     "rust-src",

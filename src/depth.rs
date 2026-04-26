@@ -6,6 +6,10 @@ impl Depth {
         Depth(value)
     }
 
+    pub(crate) fn value(self) -> usize {
+        self.0
+    }
+
     pub fn is_zero(self) -> bool {
         self.0 == 0
     }

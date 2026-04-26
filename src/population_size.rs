@@ -8,6 +8,10 @@ impl PopulationSize {
         PopulationSize(value)
     }
 
+    pub(crate) fn value(self) -> usize {
+        self.0
+    }
+
     pub fn indices(self) -> Range<usize> {
         0..self.0
     }

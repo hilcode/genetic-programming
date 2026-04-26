@@ -26,6 +26,29 @@ pub use script::ScriptEngine;
 mod simplification;
 pub use simplification::SimplificationRule;
 
+// Test support - not part of stable API
+pub mod test_support {
+    //! Utilities and types for integration testing.
+    //! Not part of the stable public API.
+
+    pub use crate::atom::Type;
+    pub use crate::depth::Depth;
+    pub use crate::population_size::PopulationSize;
+    pub use crate::script::LispError;
+    pub use crate::script::LoadedDomain;
+    pub use crate::simplification::simplify_tree;
+
+    /// Extract the inner value from PopulationSize for testing.
+    pub fn population_size_value(pop_size: &PopulationSize) -> usize {
+        pop_size.value()
+    }
+
+    /// Extract the inner value from Depth for testing.
+    pub fn depth_value(depth: &Depth) -> usize {
+        depth.value()
+    }
+}
+
 // Internal modules - implementation details
 mod crossover;
 mod depth;
